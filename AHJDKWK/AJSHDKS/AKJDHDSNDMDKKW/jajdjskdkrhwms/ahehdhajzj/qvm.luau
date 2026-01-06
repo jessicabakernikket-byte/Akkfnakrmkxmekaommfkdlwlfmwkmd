@@ -1,4 +1,5 @@
-obfuscator_state = {
+-- aetherkrnl v2.1-fixed
+local obfuscator_state = {
 	var_counter = 0,
 	func_counter = 0,
 	table_counter = 0,
@@ -6,13 +7,13 @@ obfuscator_state = {
 	vm_counter = 0
 }
 
-keyword_list = {
+local keyword_list = {
 	"and", "break", "do", "else", "elseif", "end", "false", "for",
 	"function", "if", "in", "local", "nil", "not", "or", "repeat",
 	"return", "then", "true", "until", "while", "continue"
 }
 
-keywords = {}
+local keywords = {}
 for _, k in ipairs(keyword_list) do
 	keywords[k] = true
 end
@@ -255,38 +256,53 @@ function generate_quartervm(enc_data, enc_key, closures)
 	if #closures > 0 then
 		local defs = {}
 		for i, closure in ipairs(closures) do
-			defs[#defs + 1] = string.format("QVM_CLOSURE%02d=[[%s]]", i, closure.src)
+			defs[#defs + 1] = string.format("QVM_CLOSURE%02d = [[%s]]", i, closure.src)
 		end
-		closure_defs = "local " .. table.concat(defs, ",") .. ";"
-	end
-	
-	local decrypt_table_init = {}
-	for i = 0, 255 do
-		local val = bit32.bxor(i, enc_key)
-		val = bit32.band(bit32.rrotate(val, i % 8), 255)
-		val = bit32.band(val - (i % 256), 255)
-		decrypt_table_init[#decrypt_table_init + 1] = string.format("[%d]=[[%s]]", i, string.char(val))
+		closure_defs = "local " .. table.concat(defs, ", ") .. ";"
 	end
 	
 	return string.format([[(function()
-	local DECRYPT_LOOKUP={%s}
-	local PAYLOAD_DATA="%s"
+	local DECRYPT_KEY = %d
+	local PAYLOAD_DATA = "%s"
 	%s
-	local function UNPACK_AND_RUN()
-		local len=#PAYLOAD_DATA/4
-		local result=table.create(len)
-		local pos=1
-		for i=1,len do
-			local code=tonumber(PAYLOAD_DATA:sub(pos,pos+3))
-			local idx=bit32.band(bit32.band(code-(i%256),255),255)
-			result[i]=DECRYPT_LOOKUP[idx]
-			pos=pos+4
-		end
-		local src=table.concat(result)
-		return loadstring(src)()
+	
+	local function DECRYPT_BYTE(byte, idx)
+		local val = byte
+		val = bit32.band(val - (idx %% 256), 255)
+		val = bit32.band(bit32.rrotate(val, idx %% 8), 255)
+		val = bit32.bxor(val, DECRYPT_KEY)
+		return string.char(val)
 	end
-	return UNPACK_AND_RUN()
-end)()]], table.concat(decrypt_table_init, ","), enc_data, closure_defs)
+	
+	local function UNPACK_PAYLOAD()
+		local len = #PAYLOAD_DATA / 4
+		local out = {}
+		local pos = 1
+		
+		for i = 1, len do
+			local code = tonumber(PAYLOAD_DATA:sub(pos, pos + 3))
+			out[i] = DECRYPT_BYTE(code, i)
+			pos = pos + 4
+		end
+		
+		return table.concat(out)
+	end
+	
+	local function EXECUTE_CODE(src)
+		local f, err = loadstring(src)
+		if not f then
+			error(string.format("quartervm execution failed: %%s", err))
+		end
+		return f()
+	end
+	
+	local function MAIN()
+		local decrypted = UNPACK_PAYLOAD()
+		return EXECUTE_CODE(decrypted)
+	end
+	
+	return MAIN()
+end)()]], enc_key, enc_data, closure_defs)
 end
 
 function aetherkrnl_obfuscate(src)
@@ -316,7 +332,7 @@ end
 
 return {
 	obfuscate = aetherkrnl_obfuscate,
-	version = "2.0-aetherkrnl-death",
+	version = "2.1-aetherkrnl-fixed",
 	quartervm = true,
 	modules = {
 		tokenizer = tokenize,
