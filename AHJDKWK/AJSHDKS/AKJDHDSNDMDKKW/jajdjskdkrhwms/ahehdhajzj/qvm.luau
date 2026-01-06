@@ -1,4 +1,4 @@
--- aetherkrnl v2.1-fixed
+-- aetherkrnl v2.2-fixed-finally
 local obfuscator_state = {
 	var_counter = 0,
 	func_counter = 0,
@@ -63,7 +63,7 @@ function escape_data(data)
 	local esc = {}
 	local pos = 1
 	for i = 1, #data do
-		esc[pos] = string.format("\\%03d", string.byte(data, i))
+		esc[pos] = string.format("%03d", string.byte(data, i))
 		pos = pos + 1
 	end
 	return table.concat(esc)
@@ -275,14 +275,14 @@ function generate_quartervm(enc_data, enc_key, closures)
 	end
 	
 	local function UNPACK_PAYLOAD()
-		local len = #PAYLOAD_DATA / 4
+		local len = #PAYLOAD_DATA / 3
 		local out = {}
 		local pos = 1
 		
 		for i = 1, len do
-			local code = tonumber(PAYLOAD_DATA:sub(pos, pos + 3))
+			local code = tonumber(PAYLOAD_DATA:sub(pos, pos + 2))
 			out[i] = DECRYPT_BYTE(code, i)
-			pos = pos + 4
+			pos = pos + 3
 		end
 		
 		return table.concat(out)
@@ -332,7 +332,7 @@ end
 
 return {
 	obfuscate = aetherkrnl_obfuscate,
-	version = "2.1-aetherkrnl-fixed",
+	version = "2.2-aetherkrnl-fixed-finally",
 	quartervm = true,
 	modules = {
 		tokenizer = tokenize,
